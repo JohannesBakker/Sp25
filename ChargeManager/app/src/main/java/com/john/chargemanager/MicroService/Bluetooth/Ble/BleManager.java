@@ -1,4 +1,4 @@
-package com.john.chargemanager.MicroService.Ble;
+package com.john.chargemanager.MicroService.Bluetooth.Ble;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -9,7 +9,7 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Handler;
 
-import com.john.chargemanager.MicroService.Event.SEvent;
+import com.john.chargemanager.MicroService.Bluetooth.Event.SEvent;
 import com.john.chargemanager.Utils.Logger;
 import com.support.radiusnetworks.bluetooth.BluetoothCrashResolver;
 
@@ -253,7 +253,7 @@ public class BleManager implements BleScannerListener, BlePeripheralDelegate, Bl
         }
     }
 
-    public boolean scanForPeripheralWithServices(ArrayList<UUID> services, boolean allowDuplicaes) {
+    public boolean scanForPeripheralsWithServices(ArrayList<UUID> services, boolean allowDuplicaes) {
 
         Logger.log(TAG, "BleManager.scanForPeripheralWithServices()");
 
@@ -359,17 +359,23 @@ public class BleManager implements BleScannerListener, BlePeripheralDelegate, Bl
 
         if (this.services == null) {
 
+            String szDevName = device.getName();
+            Logger.log("checking device : Device Address = %s, Name = %s", device.getAddress(), szDevName);
+
             if (device.getName() == null) {
-                Logger.log("checking device : xCharge(%s)(%s), false, getName() == null", device.getAddress(), device.getName());
+                Logger.log("checking device : iXchange(%s)(%s), false, getName() == null", device.getAddress(), device.getName());
                 return false;
             }
 
-            if (device.getName().contains("xCharge")) {
-                Logger.log("checking device : xCharge(%s)(%s), true, getName() == Power Band", device.getAddress(), device.getName());
+            if (device.getName().contains("iXchange")) {
+                Logger.log("checking device : iXchange(%s)(%s), true, getName() == Power Band", device.getAddress(), device.getName());
                 return true;
             }
 
-            Logger.log("checking device : xCharge(%s)(%s), false, getName() != Power Band", device.getAddress(), device.getName());
+            // others are not destination devices
+
+            Logger.log("checking device : iXchange(%s)(%s), false, getName() != Power Band", device.getAddress(), device.getName());
+            //return true;
             return false;
         } else {
             ArrayList<UUID> uuids = parseUuids(scanRecord);

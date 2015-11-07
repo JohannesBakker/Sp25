@@ -1,4 +1,4 @@
-package com.john.chargemanager.MicroService.Ble;
+package com.john.chargemanager.MicroService.Bluetooth.Ble;
 
 import java.util.HashMap;
 

@@ -1,11 +1,11 @@
-package com.john.chargemanager.MicroService.Ble;
+package com.john.chargemanager.MicroService.Bluetooth.Ble;
 
 import android.bluetooth.BluetoothAdapter;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 
-import com.john.chargemanager.MicroService.Event.SEvent;
+import com.john.chargemanager.MicroService.Bluetooth.Event.SEvent;
 import com.john.chargemanager.Utils.Logger;
 
 import de.greenrobot.event.EventBus;

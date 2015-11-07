@@ -1,4 +1,4 @@
-package com.john.chargemanager.MicroService.Ble;
+package com.john.chargemanager.MicroService.Bluetooth.Ble;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;

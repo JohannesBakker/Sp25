@@ -1,4 +1,4 @@
-package com.john.chargemanager.MicroService.Event;
+package com.john.chargemanager.MicroService.Bluetooth.Event;
 
 import android.content.Context;
 

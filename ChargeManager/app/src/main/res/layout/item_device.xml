@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:id="@+id/layout_item">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="50px"
+        android:text="iXchange"
+        android:id="@+id/lbl_Name"
+        android:textSize="36px"
+        android:gravity="center_vertical"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="50px"
+        android:text="Rssi"
+        android:id="@+id/lbl_Rssi"
+        android:layout_below="@+id/lbl_Name"
+        android:textSize="28px"
+        android:gravity="center_vertical" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="50px"
+        android:text="Address: "
+        android:id="@+id/lbl_Address"
+        android:textSize="28px"
+        android:gravity="center_vertical"
+        android:layout_below="@+id/lbl_Rssi" />
+</RelativeLayout>
