@@ -50,7 +50,7 @@ public class DeviceListAdapter extends BaseAdapter {
     public View getView(int position, View convertView, ViewGroup parent) {
 
         DeviceItemHolder holder = null;
-        Sp25Device selDevice = devicesArray.get(position);
+        final Sp25Device selDevice = devicesArray.get(position);
 
         if (convertView != null) {
             holder = (DeviceItemHolder)convertView.getTag();
@@ -69,9 +69,6 @@ public class DeviceListAdapter extends BaseAdapter {
 
         return convertView;
     }
-
-
-
 
     public class DeviceItemHolder {
         TextView lblName;

@@ -3,8 +3,10 @@ package com.john.chargemanager.MicroService.Bluetooth.SP25;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattService;
 
+import com.john.chargemanager.MicroService.Bluetooth.Ble.BleManager;
 import com.john.chargemanager.MicroService.Bluetooth.Ble.BlePeripheral;
 import com.john.chargemanager.MicroService.Bluetooth.Event.SEvent;
+import com.john.chargemanager.MicroService.Bluetooth.SP25.service.BatteryControlService;
 import com.john.chargemanager.MicroService.Bluetooth.SP25.service.BatteryService;
 import com.john.chargemanager.MicroService.Bluetooth.SP25.service.DeviceInformationService;
 import com.john.chargemanager.Utils.Logger;
@@ -28,23 +30,45 @@ public class Sp25Device {
     public static final int DEVICE_FINISHED = 5;
 
     public static final String kSp25DeviceDataUpdatedNotification = "SP25 device data updated notification";
-    public static final String kSp25DeviceDeviceConnectedNotification = "SP25 device connected notification";
+    public static final String kSp25DeviceConnectedNotification = "SP25 device connected notification";
     public static final String kSp25DeviceDisconnectedNotification = "SP25 device disconnected notification";
 
     protected BlePeripheral _peripheral;
     protected DeviceInformationService _deviceInfoService;
     protected BatteryService _batteryService;
+    protected BatteryControlService _batteryControlService;
 
     private int mDeviceState = DEVICE_NOTCONNECTED;
-    private int _batteryLevel;
+
+    public int _batteryLevel;
+
+    private float usb1Voltage = 0, usb1Current = 0;     // mV/mA
+    private float usb2Voltage = 0, usb2Current = 0;     // mV/mA
+    private float battChargeVoltage = 0, battChargeCurrent = 0; // mV/mA
+    private int  quality = 0;
+    private int  command = 0x0000;   // R/W
 
     public Sp25Device(BlePeripheral peripheral) {
         this._peripheral = peripheral;
 
         _batteryService = new BatteryService();
         _deviceInfoService = new DeviceInformationService();
+        _batteryControlService = new BatteryControlService();
 
         EventBus.getDefault().register(this);
+
+        if (peripheral != null) {
+            if (peripheral.connectionState() == BlePeripheral.STATE_CONNECTED) {
+                if (mDeviceState == DEVICE_NOTCONNECTED) {
+                    _peripheralConnected(peripheral);
+                }
+            }
+        }
+    }
+
+    public void setDeviceState(int deviceState) {
+        this.mDeviceState = deviceState;
+        EventBus.getDefault().post(new SEvent(kSp25DeviceDataUpdatedNotification, this));
     }
 
     public int getDeviceState() {
@@ -68,6 +92,46 @@ public class Sp25Device {
         return _peripheral.rssi();
     }
 
+    public float getUsb1Voltage() {
+        return usb1Voltage;
+    }
+
+    public float getUsb1Current() {
+        return usb1Current;
+    }
+
+    public float getUsb2Voltage() {
+        return usb2Voltage;
+    }
+
+    public float getUsb2Current() {
+        return usb2Current;
+    }
+
+    public float getBattChargeVoltage() {
+        return battChargeVoltage;
+    }
+
+    public float getBattChargeCurrent() {
+        return battChargeCurrent;
+    }
+
+    public int getBattQuality() {
+        return quality;
+    }
+
+    public int getBattCommand() {
+        return command;
+    }
+
+    public void setBattCommand(int command) {
+        this.command = command;
+    }
+
+    public BlePeripheral getPeripheral() {
+        return _peripheral;
+    }
+
     public void disconnect() {
         if (mDeviceState == DEVICE_CONNECTING ||
                 mDeviceState == DEVICE_CONNECTED ||
@@ -78,14 +142,36 @@ public class Sp25Device {
         EventBus.getDefault().unregister(this);
     }
 
-    public void setDeviceState(int deviceState) {
-        this.mDeviceState = deviceState;
-        EventBus.getDefault().post(new SEvent(kSp25DeviceDataUpdatedNotification, this));
-    }
+
 
     public void onEventMainThread(SEvent e) {
 
-        // TODO
+        if (BleManager.kBLEManagerConnectedPeripheralNotification.equalsIgnoreCase(e.name)) {
+            _peripheralConnected((BlePeripheral)e.object);
+        } else if (BleManager.kBLEManagerDisconnectedPeripheralNotification.equalsIgnoreCase(e.name)) {
+            _peripheralDisconnected((BlePeripheral)e.object);
+        } else if (BleManager.kBLEManagerPeripheralServiceDiscovered.equalsIgnoreCase(e.name)) {
+            _retrievedCharacteristics((BlePeripheral)e.object);
+        } else if (BleManager.kBLEManagerPeripheralDataAvailable.equalsIgnoreCase(e.name)) {
+            BleManager.CharacteristicData data = (BleManager.CharacteristicData)e.object;
+            _readCharacteristic(data.peripheral, data.characteristic, data.value);
+        } else if (BleManager.kBLEManagerPeripheralRssiUpdated.equalsIgnoreCase(e.name)) {
+            _rssiUpdated((BlePeripheral)e.object);
+        } else if (DeviceInformationService.kDeviceInforamtionReadSerialNumber.equalsIgnoreCase(e.name)) {
+            _readDeviceSerialNumber((BlePeripheral)e.object);
+        } else if (BatteryService.kBatteryServiceReadBatteryLevel.equalsIgnoreCase(e.name)) {
+            _updateBatteryLevel((BlePeripheral)e.object);
+        }
+        else if (BatteryControlService.kBatteryControlDischargeUsb1.equalsIgnoreCase(e.name)) {
+            _updateDischargeUsb1((BlePeripheral)e.object);
+        } else if (BatteryControlService.kBatteryControlDischargeUsb2.equalsIgnoreCase(e.name)) {
+            _updateDischargeUsb2((BlePeripheral) e.object);
+        } else if (BatteryControlService.kBatteryControlBatteryCharge.equalsIgnoreCase(e.name)) {
+            _updateBatteryCharge((BlePeripheral)e.object);
+        } else if (BatteryControlService.kBatteryControlQuality.equalsIgnoreCase(e.name)) {
+            _updateBatteryQuality((BlePeripheral)e.object);
+        }
+
     }
 
     protected void _peripheralConnected(BlePeripheral peripheral) {
@@ -179,6 +265,12 @@ public class Sp25Device {
             Logger.log("_readCharacteristic , _peripheral(%s), _batteryService", _peripheral.address());
             _batteryService.readCharacteristic(characteristic, value);
         }
+        else if (characteristic.getService() == _batteryControlService.service()) {
+            Logger.log("_readCharacteristic , _peripheral(%s), _batteryControlService", _peripheral.address());
+            _batteryControlService.readCharacteristic(characteristic, value);
+        }
+
+
     }
 
     protected void _updateBatteryLevel(BlePeripheral peripheral) {
@@ -198,6 +290,41 @@ public class Sp25Device {
     protected void _readDeviceSerialNumber(BlePeripheral peripheral) {
         if (peripheral == _peripheral) {
             Logger.log("_readDevicesSerialNumber (%s)", peripheral.address());
+        }
+    }
+
+    protected void _updateDischargeUsb1(BlePeripheral peripheral) {
+        if (peripheral == _peripheral) {
+            usb1Voltage = _batteryControlService.usb1Voltage;
+            usb1Current = _batteryControlService.usb1Current;
+
+            EventBus.getDefault().post(new SEvent(kSp25DeviceDataUpdatedNotification, this));
+        }
+    }
+
+    protected void _updateDischargeUsb2(BlePeripheral peripheral) {
+        if (peripheral == _peripheral) {
+            usb2Voltage = _batteryControlService.usb2Voltage;
+            usb2Current = _batteryControlService.usb2Current;
+
+            EventBus.getDefault().post(new SEvent(kSp25DeviceDataUpdatedNotification, this));
+        }
+    }
+
+    protected void _updateBatteryCharge(BlePeripheral peripheral) {
+        if (peripheral == _peripheral) {
+            battChargeVoltage = _batteryControlService.battChargeVoltage;
+            battChargeCurrent = _batteryControlService.battChargeCurrent;
+
+            EventBus.getDefault().post(new SEvent(kSp25DeviceDataUpdatedNotification, this));
+        }
+    }
+
+    protected void _updateBatteryQuality(BlePeripheral peripheral) {
+        if (peripheral == _peripheral) {
+            quality = _batteryControlService.quality;
+
+            EventBus.getDefault().post(new SEvent(kSp25DeviceDataUpdatedNotification, this));
         }
     }
 

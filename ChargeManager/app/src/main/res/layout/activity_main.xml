@@ -21,6 +21,17 @@
             android:layout_marginLeft="30px"
             android:layout_marginRight="30px"
             android:textSize="30px" />
+
+        <Button
+            android:layout_width="match_parent"
+            android:layout_height="140px"
+            android:text="Refresh"
+            android:id="@+id/btnRefresh"
+            android:layout_centerInParent="true"
+            android:layout_marginLeft="30px"
+            android:layout_marginRight="30px"
+            android:textSize="30px"
+            android:visibility="gone" />
     </RelativeLayout>
 
     <RelativeLayout
@@ -40,6 +51,17 @@
                 android:layout_height="match_parent"
                 android:id="@+id/listView_devices" />
         </RelativeLayout>
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:id="@+id/layout_Services">
+
+            <ListView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:id="@+id/listView_services" />
+        </RelativeLayout>
     </RelativeLayout>
 
     <RelativeLayout
@@ -51,8 +73,8 @@
         <Button
             android:layout_width="match_parent"
             android:layout_height="140px"
-            android:text="Connect"
-            android:id="@+id/btnConnect"
+            android:text="Disconnect"
+            android:id="@+id/btnDisconnect"
             android:layout_marginLeft="30px"
             android:layout_marginRight="30px"
             android:layout_centerInParent="true"

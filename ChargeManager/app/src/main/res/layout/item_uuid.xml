@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:id="@+id/layout_item">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="100px"
+        android:text="UUID: 00002018-d102-11e1-9b23-00025b00a5a5"
+        android:id="@+id/lbl_Uuid"
+        android:textSize="36px"
+        android:gravity="center_vertical"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="50px"
+        android:text="Service: "
+        android:id="@+id/lbl_Service"
+        android:layout_below="@+id/lbl_Uuid"
+        android:textSize="28px"
+        android:gravity="center_vertical" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="50px"
+        android:text="Value:"
+        android:id="@+id/lbl_Value"
+        android:textSize="28px"
+        android:gravity="center_vertical"
+        android:layout_below="@+id/lbl_Service" />
+</RelativeLayout>
