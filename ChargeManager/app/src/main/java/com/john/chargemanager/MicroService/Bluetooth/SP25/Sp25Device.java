@@ -1,6 +1,7 @@
 package com.john.chargemanager.MicroService.Bluetooth.SP25;
 
 import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 
 import com.john.chargemanager.MicroService.Bluetooth.Ble.BleManager;
@@ -32,6 +33,7 @@ public class Sp25Device {
     public static final String kSp25DeviceDataUpdatedNotification = "SP25 device data updated notification";
     public static final String kSp25DeviceConnectedNotification = "SP25 device connected notification";
     public static final String kSp25DeviceDisconnectedNotification = "SP25 device disconnected notification";
+    public static final String kSp25ServiceSettedNotification = "SP25 device setted notification";
 
     protected BlePeripheral _peripheral;
     protected DeviceInformationService _deviceInfoService;
@@ -147,11 +149,11 @@ public class Sp25Device {
     public void onEventMainThread(SEvent e) {
 
         if (BleManager.kBLEManagerConnectedPeripheralNotification.equalsIgnoreCase(e.name)) {
-            _peripheralConnected((BlePeripheral)e.object);
+            _peripheralConnected((BlePeripheral) e.object);
         } else if (BleManager.kBLEManagerDisconnectedPeripheralNotification.equalsIgnoreCase(e.name)) {
-            _peripheralDisconnected((BlePeripheral)e.object);
+            _peripheralDisconnected((BlePeripheral) e.object);
         } else if (BleManager.kBLEManagerPeripheralServiceDiscovered.equalsIgnoreCase(e.name)) {
-            _retrievedCharacteristics((BlePeripheral)e.object);
+            _retrievedCharacteristics((BlePeripheral) e.object);
         } else if (BleManager.kBLEManagerPeripheralDataAvailable.equalsIgnoreCase(e.name)) {
             BleManager.CharacteristicData data = (BleManager.CharacteristicData)e.object;
             _readCharacteristic(data.peripheral, data.characteristic, data.value);
@@ -162,14 +164,23 @@ public class Sp25Device {
         } else if (BatteryService.kBatteryServiceReadBatteryLevel.equalsIgnoreCase(e.name)) {
             _updateBatteryLevel((BlePeripheral)e.object);
         }
+        else if (BleManager.kBLEManagerPeripheralDescriptorWrite.equalsIgnoreCase(e.name)) {
+            BleManager.DescriptorData data = (BleManager.DescriptorData)e.object;
+            _descriptorWrite(data.peripheral, data.descriptor, data.success);
+        }
+
+
+
+
+
         else if (BatteryControlService.kBatteryControlDischargeUsb1.equalsIgnoreCase(e.name)) {
-            _updateDischargeUsb1((BlePeripheral)e.object);
+            _updateDischargeUsb1((BlePeripheral) e.object);
         } else if (BatteryControlService.kBatteryControlDischargeUsb2.equalsIgnoreCase(e.name)) {
             _updateDischargeUsb2((BlePeripheral) e.object);
         } else if (BatteryControlService.kBatteryControlBatteryCharge.equalsIgnoreCase(e.name)) {
-            _updateBatteryCharge((BlePeripheral)e.object);
+            _updateBatteryCharge((BlePeripheral) e.object);
         } else if (BatteryControlService.kBatteryControlQuality.equalsIgnoreCase(e.name)) {
-            _updateBatteryQuality((BlePeripheral)e.object);
+            _updateBatteryQuality((BlePeripheral) e.object);
         }
 
     }
@@ -245,8 +256,14 @@ public class Sp25Device {
                 _deviceInfoService.setService(peripheral, service);
                 Logger.log(TAG, "_retrievedCharacteristics , _peripheral(%s), deviceInfoService", _peripheral.address());
             }
-
+            else if (service.getUuid().equals(BatteryControlService.batteryControlServiceID())) {
+                _batteryControlService.setService(peripheral, service);
+                Logger.log(TAG, "_retrievedCharacteristics , _peripheral(%s), batteryControlService", _peripheral.address());
+            }
         }
+
+        // notify service setting complete
+        EventBus.getDefault().post(new SEvent(kSp25ServiceSettedNotification, this));
 
         //
     }
@@ -327,6 +344,35 @@ public class Sp25Device {
             EventBus.getDefault().post(new SEvent(kSp25DeviceDataUpdatedNotification, this));
         }
     }
+
+    /**
+     *
+     * @param peripheral
+     * @param descriptor
+     * @param success
+     */
+
+    protected void _descriptorWrite(BlePeripheral peripheral, BluetoothGattDescriptor descriptor, boolean success) {
+        if (peripheral != _peripheral || peripheral == null)
+            return;
+
+        boolean ret = _batteryControlService.descriptorWrite(descriptor, success);
+        if (ret == false) {
+            Logger.e("_descriptorWrite, peripheral (%s), descriptor write failed", peripheral.address());
+            return;
+        }
+
+        Logger.log("_descriptorWrite, peripheral (%s), SP25_DEVICE_CONNECTED, will start syncing", peripheral.address());
+        mDeviceState = DEVICE_CONNECTED;
+
+        EventBus.getDefault().post(new SEvent(kSp25DeviceConnectedNotification, this));
+    }
+
+    public void readServiceData() {
+        _batteryControlService.readAllData();
+        EventBus.getDefault().post(new SEvent(kSp25DeviceDataUpdatedNotification, this));
+    }
+
 
 
 

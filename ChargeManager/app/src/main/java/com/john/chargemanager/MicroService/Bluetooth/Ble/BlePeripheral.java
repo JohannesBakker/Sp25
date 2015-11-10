@@ -382,9 +382,4 @@ public class BlePeripheral {
     public void setSerialNo(String serialNo) {
         _seralno = serialNo;
     }
-
-
-
-
-
 }

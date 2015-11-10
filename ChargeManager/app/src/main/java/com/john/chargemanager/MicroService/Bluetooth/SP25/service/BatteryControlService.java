@@ -1,11 +1,14 @@
 package com.john.chargemanager.MicroService.Bluetooth.SP25.service;
 
 import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
+import android.os.Handler;
 
 import com.john.chargemanager.MicroService.Bluetooth.Ble.BlePeripheral;
 import com.john.chargemanager.MicroService.Bluetooth.Ble.BleService;
 import com.john.chargemanager.MicroService.Bluetooth.Event.SEvent;
+import com.john.chargemanager.Utils.AppCommon;
 import com.john.chargemanager.Utils.Logger;
 
 import java.util.HashMap;
@@ -31,7 +34,8 @@ public class BatteryControlService extends BleService {
     public static final String BATTERY_CONTROL_DISCHG_USB1_UUID = "00002013-d102-11e1-9b23-00025b00a5a5";
     public static final String BATTERY_CONTROL_DISCHG_USB2_UUID = "00002018-d102-11e1-9b23-00025b00a5a5";
     public static final String BATTERY_CONTROL_BAT_CHG_UUID     = "00002014-d102-11e1-9b23-00025b00a5a5";
-    public static final String BATTERY_CONTROL_QUALITY_UUID     = "00002011-d102-11e1-9b23-00025b00a5a5";
+    //public static final String BATTERY_CONTROL_QUALITY_UUID     = "00002011-d102-11e1-9b23-00025b00a5a5";
+    public static final String BATTERY_CONTROL_QUALITY_UUID     = "00002014-d102-11e1-9b23-00025b00a5a5";
     public static final String FIND_ME_UUID                     = "00002012-d102-11e1-9b23-00025b00a5a5";
 
 
@@ -54,6 +58,29 @@ public class BatteryControlService extends BleService {
     public float battChargeVoltage = 0, battChargeCurrent = 0;
     public int  quality = 0;
     public int  command = 0x0000;   // R/W
+
+    private BluetoothGattCharacteristic _chDisChgUsb1;
+    private BluetoothGattCharacteristic _chDisChgUsb2;
+    private BluetoothGattCharacteristic _chBattChg;
+    private BluetoothGattCharacteristic _chQuality;
+    private BluetoothGattCharacteristic _chCommand;
+
+    private Handler _handlerChgUsb1;
+    private Handler _handlerChgUsb2;
+    private Handler _handlerBattChg;
+    private Handler _handlerQuality;
+
+    private Runnable _runnableChgUsb1;
+    private Runnable _runnableChgUsb2;
+    private Runnable _runnableBattChg;
+    private Runnable _runnableQuality;
+
+    public BatteryControlService() {
+        _handlerChgUsb1 = new Handler();
+        _handlerChgUsb2 = new Handler();
+        _handlerBattChg = new Handler();
+        _handlerQuality = new Handler();
+    }
 
 
     public static String lookup(String uuid, String defaultName) {
@@ -99,11 +126,38 @@ public class BatteryControlService extends BleService {
         Iterator ci = service.getCharacteristics().iterator();
         while(ci.hasNext()) {
             BluetoothGattCharacteristic ch = (BluetoothGattCharacteristic)ci.next();
-            peripheral.readCharacteristic(ch);
+            BluetoothGattDescriptor descriptor = ch.getDescriptor(UUID.fromString(BlePeripheral.CLIENT_CHARACTERISTIC_CONFIG));
+
+            //peripheral.readCharacteristic(ch);
+
+            if (ch.getUuid().equals(batteryControlDischargeUsb1ID()) && descriptor != null) {
+                _chDisChgUsb1 = ch;
+                this._peripheral.setCharacteristicNotification(_chDisChgUsb1, true);
+            }
+            else if (ch.getUuid().equals(batteryControlDischargeUsb2ID()) && descriptor != null) {
+                _chDisChgUsb2 = ch;
+                this._peripheral.setCharacteristicNotification(_chDisChgUsb2, true);
+            }
+            else if (ch.getUuid().equals(batteryControlBatteryChargeID()) && descriptor != null) {
+                _chBattChg = ch;
+                this._peripheral.setCharacteristicNotification(_chBattChg, true);
+            }
+            else if (ch.getUuid().equals(batteryControlQualityID()) && descriptor == null) {
+                _chQuality = ch;
+            }
+            else if (ch.getUuid().equals(batteryControlFineMeID())) {
+                _chCommand = ch;
+            }
         }
     }
 
     public void readCharacteristic(BluetoothGattCharacteristic characteristic, byte[] value) {
+
+        if (value == null)
+            return;
+
+        BluetoothGattDescriptor descriptor = characteristic.getDescriptor(UUID.fromString(BlePeripheral.CLIENT_CHARACTERISTIC_CONFIG));
+
 
         if (characteristic.getService() == _service) {
 
@@ -131,21 +185,21 @@ public class BatteryControlService extends BleService {
                 Logger.log(TAG, "readCharacteristic, USB2 discharge characteristic");
                 if (value.length >= 8) {
 
-                    usb2Voltage = Character.getNumericValue(value[0]) * 1000
-                            + Character.getNumericValue(value[1]) * 100
-                            + Character.getNumericValue(value[2]) * 10
-                            + Character.getNumericValue(value[3]);
+                    usb2Voltage = Character.getNumericValue((char)value[0]) * 1000
+                            + Character.getNumericValue((char)value[1]) * 100
+                            + Character.getNumericValue((char)value[2]) * 10
+                            + Character.getNumericValue((char)value[3]);
 
-                    usb2Current = Character.getNumericValue(value[4]) * 1000
-                            + Character.getNumericValue(value[5]) * 100
-                            + Character.getNumericValue(value[6]) * 10
-                            + Character.getNumericValue(value[7]);
+                    usb2Current = Character.getNumericValue((char)value[4]) * 1000
+                            + Character.getNumericValue((char)value[5]) * 100
+                            + Character.getNumericValue((char)value[6]) * 10
+                            + Character.getNumericValue((char)value[7]);
 
                     Logger.log(TAG, "readCharacteristic, Discharge USB2 Voltage %fV, Current %fA", usb2Voltage / 1000, usb2Current / 1000);
                     EventBus.getDefault().post(new SEvent(kBatteryControlDischargeUsb2, _peripheral));
                 }
             }
-            else if (characteristic.getUuid().equals(BatteryControlService.batteryControlBatteryChargeID())) {
+            else if (characteristic.getUuid().equals(BatteryControlService.batteryControlBatteryChargeID()) && descriptor != null) {
                 Logger.log(TAG, "readCharacteristic, Battery charge characteristic");
                 if (value.length >= 8) {
 
@@ -163,14 +217,13 @@ public class BatteryControlService extends BleService {
                     EventBus.getDefault().post(new SEvent(kBatteryControlBatteryCharge, _peripheral));
                 }
             }
-            else if (characteristic.getUuid().equals(BatteryControlService.batteryControlQualityID())) {
+            else if (characteristic.getUuid().equals(BatteryControlService.batteryControlQualityID()) && descriptor == null) {
                 Logger.log(TAG, "readCharacteristic, Battery quality characteristic");
                 if (value.length >= 2) {
 
-                    quality = Character.getNumericValue(value[0]) * 10
-                            + Character.getNumericValue(value[1]);
+                    quality = (value[1] << 4) + value[0];
 
-                    Logger.log(TAG, "readCharacteristic, Battery Quality %d %", quality);
+                    Logger.log(TAG, "readCharacteristic, Battery Quality %d ", quality);
                     EventBus.getDefault().post(new SEvent(kBatteryControlQuality, _peripheral));
                 }
             }
@@ -187,5 +240,65 @@ public class BatteryControlService extends BleService {
                 }
             }
         }
+    }
+
+    public boolean descriptorWrite(BluetoothGattDescriptor descriptor, boolean success) {
+
+        if (success == false) {
+            return false;
+        }
+        return true;
+    }
+
+    public void readAllData() {
+
+        _runnableChgUsb1 = new Runnable() {
+            @Override
+            public void run() {
+                BlePeripheral peripheral = AppCommon.sharedInstance().getPeripheral();
+
+                if (_chDisChgUsb1 != null &&  peripheral!= null) {
+                    peripheral.readCharacteristic(_chDisChgUsb1);
+                }
+            }
+        };
+        _handlerChgUsb1.postDelayed(_runnableChgUsb1, 1 * 500);
+
+        _runnableChgUsb2 = new Runnable() {
+            @Override
+            public void run() {
+                BlePeripheral peripheral = AppCommon.sharedInstance().getPeripheral();
+
+                if (_chDisChgUsb2 != null &&  peripheral!= null) {
+                    peripheral.readCharacteristic(_chDisChgUsb2);
+                }
+            }
+        };
+        _handlerChgUsb2.postDelayed(_runnableChgUsb2, 2 * 500);
+
+        _runnableBattChg = new Runnable() {
+            @Override
+            public void run() {
+                BlePeripheral peripheral = AppCommon.sharedInstance().getPeripheral();
+
+                if (_chBattChg != null &&  peripheral!= null) {
+                    peripheral.readCharacteristic(_chBattChg);
+                }
+            }
+        };
+        _handlerBattChg.postDelayed(_runnableBattChg, 3 * 500);
+
+        _runnableQuality = new Runnable() {
+            @Override
+            public void run() {
+                BlePeripheral peripheral = AppCommon.sharedInstance().getPeripheral();
+
+                if (_chQuality != null &&  peripheral!= null) {
+                    peripheral.readCharacteristic(_chQuality);
+                }
+            }
+        };
+        _handlerQuality.postDelayed(_runnableQuality, 4 * 500);
+
     }
 }

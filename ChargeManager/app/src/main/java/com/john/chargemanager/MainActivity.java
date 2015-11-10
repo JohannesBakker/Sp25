@@ -22,9 +22,11 @@ import com.john.chargemanager.MicroService.Bluetooth.SP25.Sp25Device;
 import com.john.chargemanager.MicroService.Bluetooth.SP25.service.BatteryControlService;
 import com.john.chargemanager.Utils.AppCommon;
 import com.john.chargemanager.Utils.Logger;
+import com.john.chargemanager.Utils.UIManager;
 import com.support.radiusnetworks.bluetooth.BluetoothCrashResolver;
 
 import java.util.ArrayList;
+import java.util.UUID;
 
 import de.greenrobot.event.EventBus;
 
@@ -64,12 +66,16 @@ public class MainActivity extends Activity {
 
     AppCommon appCommon = null;
 
+    ArrayList<UUID> uuidArray = new ArrayList<UUID>();
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
         appCommon = AppCommon.sharedInstance();
+
+        UIManager.initialize(this);
 
         deviceListAdapter = new DeviceListAdapter(this, devicesArray);
         serviceListAdapter = new ServiceListAdapter(this, servicesArray);
@@ -90,16 +96,21 @@ public class MainActivity extends Activity {
                 appCommon.setDevice(selDevice);
                 appCommon.setPeripheral(selDevice.getPeripheral());
 
+                UIManager.sharedInstance().showProgressDialog(null, "", "Connecting", true);
+
                 // device connect
-                BleManager.sharedInstance().connectPeripheral(selDevice.getPeripheral());
+                boolean connecting = BleManager.sharedInstance().connectPeripheral(selDevice.getPeripheral());
+                if (connecting) {
+                    selDevice.setDeviceState(Sp25Device.DEVICE_CONNECTING);
+                }
+                else {
+                    UIManager.sharedInstance().dismissProgressDialog();
+                    Logger.log(TAG, "Connecting error");
+                    Toast.makeText(getApplicationContext(), "BLE is not supported", Toast.LENGTH_SHORT);
+                }
+
 //                EventBus.getDefault().post(new SEvent(BleManager.kBLEManagerConnectedPeripheralNotification, selDevice.getPeripheral()));
 
-                layout_Devices.setVisibility(View.INVISIBLE);
-                layout_Services.setVisibility(View.VISIBLE);
-
-                btnDisconnect.setEnabled(true);
-                btnScanAll.setVisibility(View.INVISIBLE);
-                btnRefresh.setVisibility(View.VISIBLE);
             }
         });
 
@@ -129,7 +140,7 @@ public class MainActivity extends Activity {
         btnRefresh.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                OnBatteryRefresh(AppCommon.sharedInstance().getDevice());
+                readAllServiceItems(AppCommon.sharedInstance().getDevice());
             }
         });
 
@@ -161,11 +172,6 @@ public class MainActivity extends Activity {
         }
 
         isBleEnabled = BleManager.sharedInstance().isBleEnabled();
-/*        if (isBleEnabled) {
-            BleManager.sharedInstance().stopAdapter();
-            BleManager.sharedInstance().stopAdapter();
-        }
-*/
         if (!isBleEnabled) {
             BleManager.sharedInstance().enableAdapter();
         }
@@ -207,6 +213,8 @@ public class MainActivity extends Activity {
         servicesArray.add(srvQuality);
 
         serviceListAdapter.notifyDataSetChanged();
+
+        initUuidArray();
     }
 
     private void OnScanAll() {
@@ -215,8 +223,11 @@ public class MainActivity extends Activity {
         devicesArray.clear();
         deviceListAdapter.notifyDataSetChanged();
 
+        UIManager.sharedInstance().showProgressDialog(null, "", "Scanning devices", true);
+
         // scan peripherals
-        BleManager.sharedInstance().scanForPeripheralsWithServices(null, true);
+//        BleManager.sharedInstance().scanForPeripheralsWithServices(null, true);
+        BleManager.sharedInstance().scanForPeripheralsWithServices(uuidArray, true);
 
         handler = new Handler(this.getMainLooper());
         handler.postDelayed(new Runnable() {
@@ -225,8 +236,10 @@ public class MainActivity extends Activity {
                 BleManager.sharedInstance().stopScan();
 
                 RefreshDeviceListView();
+
+                UIManager.sharedInstance().dismissProgressDialog();
             }
-        }, 10 * 1000);
+        }, 5 * 1000);
     }
 
     public void RefreshDeviceListView() {
@@ -240,7 +253,6 @@ public class MainActivity extends Activity {
         for (int i = 0; i < peripherals.size(); i++)
         {
             Sp25Device newDev = new Sp25Device(peripherals.get(i));
-
             devicesArray.add(newDev);
         }
 
@@ -261,23 +273,29 @@ public class MainActivity extends Activity {
         appCommon.setDevice(null);
         appCommon.setPeripheral(null);
 
-        layout_Devices.setVisibility(View.VISIBLE);
-        layout_Services.setVisibility(View.INVISIBLE);
+        devicesArray.clear();
+        deviceListAdapter.notifyDataSetChanged();
 
-        btnDisconnect.setEnabled(false);
-        btnScanAll.setVisibility(View.VISIBLE);
-        btnRefresh.setVisibility(View.INVISIBLE);
+        changeUI(false);
     }
 
-    private void OnBatteryRefresh(Sp25Device selDevice) {
+    private void resetServiceDataItems() {
+        servicesArray.get(kSERVICE_ITEM_DISCHG_USB1).setValue("");
+        servicesArray.get(kSERVICE_ITEM_DISCHG_USB2).setValue("");
+        servicesArray.get(kSERVICE_ITEM_BAT_CHG).setValue("");
+        servicesArray.get(kSERVICE_ITEM_QUALITY).setValue("");
 
+        serviceListAdapter.notifyDataSetChanged();
+    }
+
+    private void refreshServiceItems(Sp25Device selDevice) {
         if (selDevice == null)
             return;
 
-        String szDisUsb1 = String.format("%fV, %fA", selDevice.getUsb1Voltage()/1000, selDevice.getUsb1Current()/1000);
-        String szDisUsb2 = String.format("%fV, %fA", selDevice.getUsb2Voltage()/1000, selDevice.getUsb2Current()/1000);
-        String szBattChg = String.format("%fV, %fA", selDevice.getBattChargeVoltage() / 1000, selDevice.getBattChargeCurrent() / 1000);
-        String szQuality = String.format("%d %", selDevice.getBattQuality());
+        String szDisUsb1 = String.format("%.3fV, %.3fA", selDevice.getUsb1Voltage()/1000, selDevice.getUsb1Current()/1000);
+        String szDisUsb2 = String.format("%.3fV, %.3fA", selDevice.getUsb2Voltage()/1000, selDevice.getUsb2Current()/1000);
+        String szBattChg = String.format("%.3fV, %.3fA", selDevice.getBattChargeVoltage() / 1000, selDevice.getBattChargeCurrent() / 1000);
+        String szQuality = String.format("0x%04X", selDevice.getBattQuality());
 
         servicesArray.get(kSERVICE_ITEM_DISCHG_USB1).setValue(szDisUsb1);
         servicesArray.get(kSERVICE_ITEM_DISCHG_USB2).setValue(szDisUsb2);
@@ -287,13 +305,68 @@ public class MainActivity extends Activity {
         serviceListAdapter.notifyDataSetChanged();
     }
 
+    private void readAllServiceItems(Sp25Device selDevice) {
+        if (selDevice != null) {
+            UIManager.sharedInstance().showProgressDialog(null, "", "Reading", true);
+            resetServiceDataItems();
+            selDevice.readServiceData();
+        }
+
+    }
+
     public void onEventMainThread(SEvent e)  {
         if (Sp25Device.kSp25DeviceDataUpdatedNotification.equalsIgnoreCase(e.name)) {
-            OnBatteryRefresh((Sp25Device)e.object);
+            refreshServiceItems((Sp25Device) e.object);
+        }
+        else if (Sp25Device.kSp25ServiceSettedNotification.equalsIgnoreCase(e.name)) {
+            readAllServiceItems((Sp25Device) e.object);
+        }
+        else if (Sp25Device.kSp25DeviceConnectedNotification.equalsIgnoreCase(e.name)) {
+
+            UIManager.sharedInstance().dismissProgressDialog();
+            changeUI(true);
+        }
+        else if (Sp25Device.kSp25DeviceDisconnectedNotification.equalsIgnoreCase(e.name)) {
+            UIManager.sharedInstance().dismissProgressDialog();
+            changeUI(false);
+            Toast.makeText(getApplicationContext(), "Device disconnected", Toast.LENGTH_SHORT);
         }
     }
 
+    private void changeUI(boolean bDeviceConnected) {
+        if (bDeviceConnected) {
+            // display UI with ServiceItem list
+            layout_Devices.setVisibility(View.INVISIBLE);
+            layout_Services.setVisibility(View.VISIBLE);
 
+            btnDisconnect.setEnabled(true);
+            btnScanAll.setVisibility(View.INVISIBLE);
+            btnRefresh.setVisibility(View.VISIBLE);
+        }
+        else {
+            layout_Devices.setVisibility(View.VISIBLE);
+            layout_Services.setVisibility(View.INVISIBLE);
 
+            btnDisconnect.setEnabled(false);
+            btnScanAll.setVisibility(View.VISIBLE);
+            btnRefresh.setVisibility(View.INVISIBLE);
+        }
+    }
 
+    public void initUuidArray() {
+
+        uuidArray.add(UUID.fromString("00005500-D102-11E1-9B23-00025B00A5A5"));
+        uuidArray.add(UUID.fromString("00005501-D102-11E1-9B23-00025B00A5A5"));
+        uuidArray.add(UUID.fromString("00002016-d102-11e1-9b23-00025b00a5a5"));
+        uuidArray.add(UUID.fromString("00002013-d102-11e1-9b23-00025b00a5a5"));
+        uuidArray.add(UUID.fromString("00002018-d102-11e1-9b23-00025b00a5a5"));
+        uuidArray.add(UUID.fromString("00002014-d102-11e1-9b23-00025b00a5a5"));
+        uuidArray.add(UUID.fromString("00002011-d102-11e1-9b23-00025b00a5a5"));
+        uuidArray.add(UUID.fromString("00002012-d102-11e1-9b23-00025b00a5a5"));
+        uuidArray.add(UUID.fromString("00001016-d102-11e1-9b23-00025b00a5a5"));
+        uuidArray.add(UUID.fromString("00001013-d102-11e1-9b23-00025b00a5a5"));
+        uuidArray.add(UUID.fromString("00001018-d102-11e1-9b23-00025b00a5a5"));
+        uuidArray.add(UUID.fromString("00001014-d102-11e1-9b23-00025b00a5a5"));
+        uuidArray.add(UUID.fromString("00001011-d102-11e1-9b23-00025b00a5a5"));
+    }
 }
